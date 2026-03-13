@@ -1,5 +1,5 @@
-data/
-prepared/
+Fantastic_Breaks_v1/
+metadata_dict/
 .vscode/
 __pycache__/
 part_segmentation_ShapeNet.ipynb
