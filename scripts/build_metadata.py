@@ -8,25 +8,42 @@ from typing import Dict, Optional, Tuple
 import pandas as pd
 
 PATTERNS = {
+    # .npz files contain metadata and other object properties
     "npz": re.compile(r"Fantastic_Breaks_v1/\d{2}/(?P<object_id>\d+)/meta_.*\.npz"),
+    # _b_.ply files represent the 'broken' or fractured part of the object
     "b": re.compile(r"Fantastic_Breaks_v1/\d{2}/(?P<object_id>\d+)/model_b_.*\.ply"),
+    # _c.ply files represent the 'complete' or unbroken object
     "c": re.compile(r"Fantastic_Breaks_v1/\d{2}/(?P<object_id>\d+)/model_c\.ply"),
+    # _r_.ply files represent the 'restored' or broken pieces to be restored
     "r": re.compile(r"Fantastic_Breaks_v1/\d{2}/(?P<object_id>\d+)/model_r_.*\.ply"),
 }
 
 def match_file(path: Path) -> Optional[Tuple[str, str]]:
     """
-    Match a file path to its kind and object ID.
+    Match a file path to its kind ('npz', 'b', 'c', or 'r') and extract its object ID.
+    
+    Args:
+        path (Path): The file path to check.
+        
+    Returns:
+        Optional[Tuple[str, str]]: A tuple of (file_kind, object_id) if matched, else None.
     """
     for kind, pattern in PATTERNS.items():
         m = pattern.search(path.as_posix())
         if m:
+            # Return the file kind (e.g., 'b') and the extracted object ID from the regex
             return kind, m.group("object_id")
     return None
 
 def infer_split(path: Path) -> str:
     """
-    Infer the split (train/val/test) from the path.
+    Infer the dataset split (train/val/test) from the directory path.
+    
+    Args:
+        path (Path): The file path to infer the split from.
+        
+    Returns:
+        str: The split name if found ('train', 'val', 'test'), else 'unknown'.
     """
     lowered = [p.lower() for p in path.parts]
     for split in ("train", "val", "test"):
@@ -35,16 +52,32 @@ def infer_split(path: Path) -> str:
     return "unknown"
 
 def collect_metadata(raw_root: Path) -> pd.DataFrame:
+    """
+    Traverse the raw dataset root directory to find all relevant files, group them by object ID,
+    and build a pandas DataFrame containing the metadata for each object.
+    
+    Args:
+        raw_root (Path): The root directory of the dataset.
+        
+    Returns:
+        pd.DataFrame: A dataframe where each row corresponds to a single object ID.
+    """
+    # Dictionary to keep track of files belonging to each object_id
+    # Format: {object_id: {"object_id": ..., "split": ..., "path_<kind>": ...}}
     records: Dict[str, Dict[str, str]] = {}
 
     for path in raw_root.rglob("*"):
         if not path.is_file():
             continue
+            
+        # Check if the file matches any of our predefined patterns
         matched = match_file(path)
         if matched is None:
             continue
-
+        
         kind, object_id = matched
+        
+        # Initialize the record for this object_id if it doesn't exist yet
         rec = records.setdefault(
             object_id,
             {
@@ -52,27 +85,38 @@ def collect_metadata(raw_root: Path) -> pd.DataFrame:
                 "split": infer_split(path),
             }
         )
+        
+        # Save the absolute path for this specific file kind
         rec[f"path_{kind}"] = str(path.resolve())
     
     rows = []
+    # Sort by object_id to ensure consistent ordering in the output
     for object_id, rec in sorted(records.items()):
+        # Ensure that every key exists even if the file is missing
         for kind in ("npz", "b", "c", "r"):
             rec.setdefault(f"path_{kind}", "")
+            
+        # Determine if this object has all the required files 
         rec["has_all_files"] = all(rec[f"path_{kind}"] for kind in ("npz", "b", "c", "r"))
         rows.append(rec)
     
     return pd.DataFrame(rows)
 
 def main() -> None:
+    # Set up command line argument parsing
     parser = argparse.ArgumentParser(description="Build metadata CSV for Fantastic Breaks-like dataset.")
-    parser.add_argument("--raw-root", type=Path, required=True, help="Raw dataset root")
-    parser.add_argument("--output-csv", type=Path, required=True, help="Output metadata CSV")
+    parser.add_argument("--raw-root", type=Path, required=True, help="Raw dataset root directory to scan.")
+    parser.add_argument("--output-csv", type=Path, required=True, help="Path where the output metadata CSV will be saved.")
     args = parser.parse_args()
 
+    # Collect metadata into a dataframe
     df = collect_metadata(args.raw_root)
+    
+    # Ensure the output directory exists before saving
     args.output_csv.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(args.output_csv, index=False)
 
+    # Calculate statistics based on the dataframe
     total = len(df)
     complete = int(df["has_all_files"].sum()) if total > 0 else 0
 
@@ -81,6 +125,7 @@ def main() -> None:
     print(f"Complete objects: {complete}")
     print(f"Incomplete objects: {total - complete}")
 
+    # Print a quick preview of the top 10 rows
     if total > 0:
         print("\nPreview:")
         print(df.head(10).to_string(index=False))
