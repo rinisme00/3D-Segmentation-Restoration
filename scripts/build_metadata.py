@@ -20,36 +20,39 @@ from typing import Dict, Optional, Tuple
 import pandas as pd
 
 PATTERNS = {
-    # .npz files contain metadata and other object properties
-    "npz": re.compile(r"Fantastic_Breaks_v1/\d{2}/(?P<object_id>\d+)/meta_.*\.npz"),
-    # _b_.ply files represent the 'broken' or fractured part of the object
-    "b": re.compile(r"Fantastic_Breaks_v1/\d{2}/(?P<object_id>\d+)/model_b_.*\.ply"),
-    # _c.ply files represent the 'complete' or unbroken object
+    # .npz files contain metadata and other object properties. The _\d+ captures the fracture index.
+    "npz": re.compile(r"Fantastic_Breaks_v1/\d{2}/(?P<object_id>\d+)/meta_(?P<fracture_id>\d+)\.npz"),
+    # _b_.*.ply files represent the 'broken' or fractured part of the object
+    "b": re.compile(r"Fantastic_Breaks_v1/\d{2}/(?P<object_id>\d+)/model_b_(?P<fracture_id>\d+)\.ply"),
+    # _c.ply files represent the 'complete' or unbroken object (applies to all fractures)
     "c": re.compile(r"Fantastic_Breaks_v1/\d{2}/(?P<object_id>\d+)/model_c\.ply"),
-    # _r_.ply files represent the 'restored' or broken pieces to be restored
-    "r": re.compile(r"Fantastic_Breaks_v1/\d{2}/(?P<object_id>\d+)/model_r_.*\.ply"),
+    # _r_.*.ply files represent the 'restored' or broken piece to be restored
+    "r": re.compile(r"Fantastic_Breaks_v1/\d{2}/(?P<object_id>\d+)/model_r_(?P<fracture_id>\d+)\.ply"),
 }
 
-def match_file(path: Path) -> Optional[Tuple[str, str]]:
+def match_file(path: Path) -> Optional[Tuple[str, str, str]]:
     """
-    Match a file path to its kind ('npz', 'b', 'c', or 'r') and extract its object ID.
+    Match a file path to its kind ('npz', 'b', 'c', or 'r') and extract its object ID and fracture ID.
     
     Args:
         path (Path): The file path to check.
         
     Returns:
-        Optional[Tuple[str, str]]: A tuple of (file_kind, object_id) if matched, else None.
+        Optional[Tuple[str, str, str]]: A tuple of (file_kind, object_id, fracture_id) if matched, else None.
     """
     for kind, pattern in PATTERNS.items():
         m = pattern.search(path.as_posix())
         if m:
-            # Return the file kind (e.g., 'b') and the extracted object ID from the regex
-            return kind, m.group("object_id")
+            # Complete meshes ('c') do not have a fracture_id, so default to '0'.
+            fracture_id = m.group("fracture_id") if "fracture_id" in pattern.groupindex else "0"
+            return kind, m.group("object_id"), fracture_id
     return None
 
 def infer_split(path: Path) -> str:
     """
     Infer the dataset split (train/val/test) from the directory path.
+    Since the directory structure might omit the split names if the dataset 
+    is moved, default to 'unknown' unless 'train', 'val', or 'test' is found.
     
     Args:
         path (Path): The file path to infer the split from.
@@ -58,25 +61,29 @@ def infer_split(path: Path) -> str:
         str: The split name if found ('train', 'val', 'test'), else 'unknown'.
     """
     lowered = [p.lower() for p in path.parts]
-    for split in ("train", "val", "test"):
+    for split in ("train", "val", "test", "training", "validation", "testing"):
         if split in lowered:
-            return split
+            return split.replace("ing", "").replace("ion", "")  # Normalize names
     return "unknown"
 
 def collect_metadata(raw_root: Path) -> pd.DataFrame:
     """
-    Traverse the raw dataset root directory to find all relevant files, group them by object ID,
-    and build a pandas DataFrame containing the metadata for each object.
+    Traverse the raw dataset root directory to find all relevant files, group them by object ID
+    and fracture ID, and build a pandas DataFrame containing the metadata for each fractured piece.
     
     Args:
         raw_root (Path): The root directory of the dataset.
         
     Returns:
-        pd.DataFrame: A dataframe where each row corresponds to a single object ID.
+        pd.DataFrame: A dataframe where each row corresponds to a single object fracture ID.
     """
-    # Dictionary to keep track of files belonging to each object_id
-    # Format: {object_id: {"object_id": ..., "split": ..., "path_<kind>": ...}}
+    # Dictionary to keep track of files belonging to each object_id + fracture_id combination.
+    # Format: {f"{object_id}_{fracture_id}": {"object_id": ..., "split": ..., "path_<kind>": ...}}
     records: Dict[str, Dict[str, str]] = {}
+    
+    # Complete paths are shared across fractures for the same object
+    # Format: {object_id: path_c}
+    complete_paths: Dict[str, str] = {}
 
     for path in raw_root.rglob("*"):
         if not path.is_file():
@@ -87,13 +94,21 @@ def collect_metadata(raw_root: Path) -> pd.DataFrame:
         if matched is None:
             continue
         
-        kind, object_id = matched
+        kind, object_id, fracture_id = matched
+        
+        # Save complete paths to share across multiple fractures
+        if kind == "c":
+            complete_paths[object_id] = str(path.resolve())
+            continue
+            
+        # Use a composite key for fractures to avoid overwriting pieces of the same object
+        composite_id = f"{object_id}_{fracture_id}"
         
         # Initialize the record for this object_id if it doesn't exist yet
         rec = records.setdefault(
-            object_id,
+            composite_id,
             {
-                "object_id": object_id,
+                "object_id": composite_id,
                 "split": infer_split(path),
             }
         )
@@ -103,7 +118,12 @@ def collect_metadata(raw_root: Path) -> pd.DataFrame:
     
     rows = []
     # Sort by object_id to ensure consistent ordering in the output
-    for object_id, rec in sorted(records.items()):
+    for composite_id, rec in sorted(records.items()):
+        # Retrieve the complete mesh path for the base object id, stripping the fracture suffix
+        base_obj_id = composite_id.split("_")[0]
+        if base_obj_id in complete_paths:
+            rec["path_c"] = complete_paths[base_obj_id]
+            
         # Ensure that every key exists even if the file is missing
         for kind in ("npz", "b", "c", "r"):
             rec.setdefault(f"path_{kind}", "")

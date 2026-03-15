@@ -4,3 +4,4 @@ metadata_dict/
 __pycache__/
 part_segmentation_ShapeNet.ipynb
 semantic_segmentation_with_FantasticBreakv1_Datasets.ipynb
+data/

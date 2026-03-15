@@ -3,7 +3,7 @@ Purpose:
 This script inspects the schema of .npz metadata files listed in a metadata CSV.
 It reads the arrays contained in each .npz, extracting their keys, shapes, and datatypes.
 Furthermore, it applies heuristics to identify keys that might represent
-3D transformation matrices or boolean masks.
+3D transformation matrices (which un-normalize bounding box coordinates) or boolean masks.
 
 Usage:
     python scripts/inspect_npz_schema.py \\
@@ -26,8 +26,10 @@ def is_transform_candidate(arr: np.ndarray) -> bool:
     """
     Check if a numpy array's shape suggests it might be a 3D transformation matrix.
     
-    Transforms are typically 4x4 or 3x4 matrices. They can also be stacked
-    in an array (e.g., N x 4 x 4).
+    Transforms are typically 4x4 matrices. In this dataset, the 'transform' matrix 
+    maps from the normalized [-0.5, 0.5] unit bounding box coordinates back to the 
+    original un-normalized mesh coordinates. It is represented as a 4x4 scaling/translation matrix.
+    They can also be stacked in an array (e.g., N x 4 x 4).
     
     Args:
         arr (np.ndarray): The array to evaluate.
