@@ -8,3 +8,5 @@ processed/
 classification/
 *.ckpt.*
 checkpoint
+BreakingBad/
+breaking-bad-dataset/

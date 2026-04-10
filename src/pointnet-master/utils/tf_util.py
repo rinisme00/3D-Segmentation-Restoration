@@ -16,6 +16,14 @@ def _truncated_normal_initializer(stddev):
     return tf.truncated_normal_initializer(stddev=stddev)
   return tf.compat.v1.truncated_normal_initializer(stddev=stddev)
 
+def _xavier_initializer():
+  contrib = getattr(tf, 'contrib', None)
+  if contrib is not None:
+    layers = getattr(contrib, 'layers', None)
+    if layers is not None and hasattr(layers, 'xavier_initializer'):
+      return layers.xavier_initializer()
+  return tf.keras.initializers.GlorotUniform()
+
 def _add_to_collection(name, value):
   if hasattr(tf, 'add_to_collection'):
     tf.add_to_collection(name, value)
@@ -53,8 +61,11 @@ def _variable_with_weight_decay(name, shape, stddev, wd, use_xavier=True):
   Returns:
     Variable Tensor
   """
+  shape = [_shape_value(dim) for dim in shape]
+  if any(dim is None for dim in shape):
+    raise ValueError('Variable shape must be fully defined for {}: {}'.format(name, shape))
   if use_xavier:
-    initializer = tf.contrib.layers.xavier_initializer()
+    initializer = _xavier_initializer()
   else:
     initializer = _truncated_normal_initializer(stddev=stddev)
   var = _variable_on_cpu(name, shape, initializer)
