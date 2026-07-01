@@ -1,0 +1,24 @@
+pretrained_checkpoint: "<your_checkpoint_path>/best_model.pth"
+save_dir: "<your_output_path>/restoration/deepmend_10d_fb_finetune"
+csv_path: "<your_dataset_path>/preprocessed/restoration/completion_pairs_9d/sample_index_fb.csv"
+batch_size: 32
+epochs: 135
+
+optimizer: "AdamW"
+weight_decay: 0.05
+encoder_lr: 5.0e-6
+decoder_lr: 1.0e-4
+
+scheduler:
+  type: "SequentialLR"
+  warmup_epochs: 15
+  min_lr: 1.0e-6
+
+augmentations:
+  use_gaussian_jitter: false
+  use_point_dropout: false
+  rigid_se3:
+    random_y_rotation: true
+    isotropic_scale_range: [0.92, 1.08]
+    random_cuboid_cutout_prob: 0.3
+    mirror_xyz_prob: 0.5

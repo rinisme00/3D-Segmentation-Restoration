@@ -1,0 +1,23 @@
+# Lightweight manifest build defaults for dataset manifest generation.
+
+project_root: <your_project_path>
+data_root: <your_dataset_path>
+
+outputs:
+  segmentation: <your_output_path>/manifests/segmentation
+  restoration: <your_output_path>/manifests/restoration
+
+rules:
+  build_feature_modes: ["3d", "9d"]
+  split_status: unassigned
+  do_not_preprocess_points: true
+  do_not_convert_blender_annotations: true
+  delete_temp_smoke_outputs_after_validation: true
+
+annotation_sources:
+  breakingbad_status: blender_pending
+  conversion_status: pending_sidecar_mask_conversion
+
+garf:
+  segmentation_label_status: unknown_schema_inventory_only
+  restoration_rows: skipped_until_partial_complete_pairs_confirmed

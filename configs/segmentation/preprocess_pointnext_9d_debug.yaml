@@ -1,0 +1,10 @@
+manifest: ../manifests/segmentation/all_segmentation_manifest.csv
+output_dir: /tmp/task_01_07_segmentation_pointnext_9d_smoke
+model_family: pointnext
+feature_mode: 9d
+num_points: 8192
+limit: 4
+seed: 11
+dry_run: true
+debug: true
+overwrite: true

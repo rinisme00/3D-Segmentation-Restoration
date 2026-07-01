@@ -1,0 +1,41 @@
+scan_defaults:
+  max_depth: 3
+  max_files_per_dataset: 200
+  sample_per_extension: 5
+
+datasets:
+  - name: breaking_bad
+    root: ${DATA_ROOT}/BreakingBad
+    expected_paths:
+      - artifact
+      - everyday
+      - artifact_compressed.zip
+      - everyday_compressed.zip
+    notes:
+      - Raw Breaking Bad root. Use artifact and everyday categories later.
+      - Do not restrict to old 4/20 subsets.
+
+  - name: fantastic_breaks
+    root: ${DATA_ROOT}/Fantastic_Breaks_v1
+    expected_names:
+      - model_c.ply
+      - model_b_0.ply
+      - model_r_0.ply
+    expected_extensions:
+      - .ply
+      - .npz
+      - .npy
+    notes:
+      - Raw Fantastic Breaks v1 root. Use full dataset later.
+      - Restoration mapping is model_c complete target and model_b_0/model_r_0 partial inputs.
+
+  - name: garf
+    root: ${DATA_ROOT}/garf
+    expected_paths:
+      - bone_synthetic.hdf5
+      - bone_real.hdf5
+      - fractura_real.hdf5
+    expected_extensions:
+      - .hdf5
+    notes:
+      - GARF HDF5 root. Schema inspection is deferred until label semantics are confirmed.

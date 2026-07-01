@@ -1,0 +1,71 @@
+# Unified manifest schema contract for Stage 1.
+#
+# Structured fields are stored as JSON strings in CSV so the same format can be
+# consumed by shell tools, pandas, and Python dataclasses.
+
+columns:
+  dataset_name:
+    required: true
+    description: Dataset identifier, for example BreakingBad or FantasticBreaks.
+  stage:
+    required: true
+    allowed_values: [segmentation, restoration]
+  object_id:
+    required: true
+  category:
+    required: false
+  sample_id:
+    required: true
+  source_paths:
+    required: true
+    encoding: json_object_string
+  label_paths:
+    required: true
+    encoding: json_object_string
+  class_label:
+    required_for: []
+    allowed_values: ["", "0", "1"]
+  point_labels_available:
+    required: true
+    allowed_values: ["true", "false"]
+  partial_path:
+    required_for: [restoration]
+  complete_path:
+    required_for: [restoration]
+  feature_mode:
+    required: true
+    allowed_values: ["3d", "9d"]
+  split:
+    required: false
+    allowed_values: ["", train, val, test]
+  metadata:
+    required: true
+    encoding: json_object_string
+
+stage_rules:
+  segmentation:
+    class_label: empty
+    point_labels_available: true_only_after_label_sidecar_validation
+    blender_pending_rows: not_supervised_training_labels
+  restoration:
+    class_label: empty
+    point_labels_available: "false"
+    partial_path: required
+    complete_path: required
+
+annotation_metadata:
+  annotation_source_status:
+    allowed_values: [none, blender_pending, converted, invalid, review]
+    default: none
+  fields:
+    - annotation_subset
+    - annotation_variant
+    - annotated_obj_path
+    - annotated_mtl_path
+    - material_vocab_observed
+    - filename_repair_needed
+    - material_alias_repair_needed
+
+notes:
+  - Blender OBJ/MTL-only annotations stay blender_pending until they are converted to sidecar masks.
+  - GARF quantitative evaluation must be gated by manifest label semantics, not by dataset name alone.
